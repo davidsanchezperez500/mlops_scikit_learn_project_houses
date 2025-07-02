@@ -1,0 +1,11 @@
+infra/.terraform
+infra/*.tfstate.backup
+infra/*.tfstate.*.backup
+infra/*.plan
+infra/*.tfplan
+*.swp
+.idea/
+.secrets/
+infra/.secrets/
+.DS_Store
+venv/
