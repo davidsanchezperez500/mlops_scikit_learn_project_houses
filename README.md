@@ -1,5 +1,19 @@
 # MLOps: Predicción de precios de casas con scikit-learn + Vertex AI
 
+Este repositorio muestra un flujo completo de MLOps para la predicción de precios de casas utilizando scikit-learn y Vertex AI en Google Cloud Platform. Aquí encontrarás:
+
+- Código y scripts para entrenar un modelo de machine learning localmente y en Vertex AI.
+- Instrucciones para preparar el entorno, instalar dependencias y autenticarse con GCP.
+- Ejemplos para subir datos a Google Cloud Storage y gestionar artefactos.
+- Guía para construir y subir imágenes Docker personalizadas.
+- Comandos para ejecutar entrenamientos en Vertex AI, subir modelos y desplegarlos en endpoints para predicción online.
+- Archivos de infraestructura como código (Terraform) para aprovisionar recursos en GCP (ver carpeta `mlops_training_gcp_admin`).
+
+El objetivo es mostrar buenas prácticas de MLOps, desde el desarrollo local hasta el despliegue y la inferencia en la nube, facilitando la reproducibilidad y automatización del ciclo de vida de modelos de machine learning.
+
+---
+
+
 ## Requisitos
 - Python 3.8+
 - GCP SDK configurado y autenticado
