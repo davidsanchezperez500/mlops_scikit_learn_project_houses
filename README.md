@@ -1,4 +1,4 @@
-# MLOps: Predicción de precios de casas con scikit-learn + Vertex AI
+# MLOps: Predicción de precios de casas con scikit-learn + Vertex AI - training
 
 Este repositorio muestra un flujo completo de MLOps para la predicción de precios de casas utilizando scikit-learn y Vertex AI en Google Cloud Platform. Aquí encontrarás:
 
@@ -12,6 +12,13 @@ Este repositorio muestra un flujo completo de MLOps para la predicción de preci
 El objetivo es mostrar buenas prácticas de MLOps, desde el desarrollo local hasta el despliegue y la inferencia en la nube, facilitando la reproducibilidad y automatización del ciclo de vida de modelos de machine learning.
 
 ---
+## TODO
+
+- Reentrenamiento Automatizado: Implementar triggers para reentrenar el modelo (ej., en un cronograma, o cuando la calidad del modelo disminuya).
+- Monitorización del Modelo: Configurar alertas y paneles en Vertex AI para monitorizar el rendimiento del modelo en producción (deriva de datos, deriva de conceptos, sesgo, etc.).
+- Pruebas Automatizadas: Añadir más tests a tu pipeline de GitHub Actions, como pruebas unitarias para tu código de entrenamiento o pruebas de integración después del despliegue.
+- Versionado del Modelo: Gestionar las diferentes versiones de tus modelos en el registro de modelos y cómo se despliegan.
+- A/B Testing de Modelos: Si tienes múltiples versiones de modelos, puedes usar el tráfico dividido en los endpoints de Vertex AI para dirigir un porcentaje del tráfico a diferentes modelos.
 
 
 ## Requisitos
@@ -60,43 +67,4 @@ gcloud ai custom-jobs create \
   --region=${REGION} \
   --worker-pool-spec=machine-type=n1-standard-4,replica-count=1,container-image-uri=${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME} \
   --args=--data-path=gs://$VERTEX_BUCKET/data/housing.csv,--model-dir=/gcs/$VERTEX_BUCKET/models/house-price-model
-```
-## Subir el modelo a Vertex AI
-```bash
-
-gcloud ai models upload \
-  --region=${REGION} \
-  --display-name="house-price-model" \
-  --artifact-uri=gs://${VERTEX_BUCKET}/models/house-price-model/ \
-  --container-image-uri=us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-5:latest
-
-```
-
-
-## Desplegar el modelo en un endpoint
-```bash
-YOUR_MODEL_ID=$(gcloud ai models list --region=${REGION} --filter="displayName:house-price-model" --format="value(name)" | cut -d '/' -f 6)
-YOUR_ENDPOINT_DISPLAY_NAME="house-price-prediction-endpoint"
-YOUR_ENDPOINT_ID_NUMERIC=$(gcloud ai endpoints list --region=${REGION} --filter="displayName:${YOUR_ENDPOINT_DISPLAY_NAME}" --format="value(name)" | cut -d '/' -f 6)
-
-gcloud ai endpoints deploy-model ${YOUR_ENDPOINT_ID_NUMERIC} \
-  --model=projects/${PROJECT_ID}/locations/${REGION}/models/${YOUR_MODEL_ID} \
-  --display-name="house-price-deployment" \
-  --machine-type=n1-standard-2 \
-  --min-replica-count=1 \
-  --max-replica-count=1 \
-  --traffic-split=0=100 \
-  --region=${REGION}
-
-
-
-## Realizar Predicciones Online
-```bash
-PROJECT_ID=mlops-training-462812
-REGION=us-central1
-YOUR_ENDPOINT_ID_NUMERIC=$(gcloud ai endpoints list --region=${REGION} --filter="displayName:${YOUR_ENDPOINT_DISPLAY_NAME}" --format="value(name)" | cut -d '/' -f 6)
-
-gcloud ai endpoints predict ${YOUR_ENDPOINT_ID_NUMERIC} \
-  --region=${REGION} \
-  --json-request=test_instance.json
 ```

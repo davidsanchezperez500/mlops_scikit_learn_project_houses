@@ -1,5 +1,6 @@
-pandas
-scikit-learn
-joblib
+numpy==1.23.5
+pandas==1.5.3
+scikit-learn==1.3.0
+joblib==1.3.0
 fsspec
 gcsfs
