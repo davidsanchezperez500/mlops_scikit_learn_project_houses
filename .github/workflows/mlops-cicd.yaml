@@ -3,7 +3,7 @@ name: MLOps CI/CD Pipeline
 on:
   push:
     branches:
-      - main
+      - training_pipelines
 
 jobs:
   build_train_deploy:
@@ -37,21 +37,29 @@ jobs:
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
       - name: "Set up Cloud SDK"
-        uses: "google-github-actions/setup-gcloud@v1"
+        uses: "google-github-actions/setup-gcloud@v2"
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
-          version: ">= 390.0.0"
 
       - name: "Configure Docker for Artifact Registry"
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
 
-      - name: "Build and Push Docker Image"
+      - name: "Build and Push Trainer Docker Image"
         run: |
           IMAGE_TAG="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GCP_ARTIFACT_REGISTRY_REPO }}/house-price-trainer:latest"
           echo "Building Docker image: ${IMAGE_TAG}"
           docker build --platform linux/amd64 -t "${IMAGE_TAG}" .
           echo "Pushing Docker image: ${IMAGE_TAG}"
           docker push "${IMAGE_TAG}"
+
+
+      - name: "Build and Push Serving Docker Image"
+        run: |
+          SERVING_IMAGE_TAG="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GCP_ARTIFACT_REGISTRY_REPO }}/house-price-predictor:latest"
+          echo "Building Serving Docker image: ${SERVING_IMAGE_TAG}"
+          docker build --platform linux/amd64 -f Dockerfile.serve -t "${SERVING_IMAGE_TAG}" .
+          echo "Pushing Serving Docker image: ${SERVING_IMAGE_TAG}"
+          docker push "${SERVING_IMAGE_TAG}"
 
       - name: "Upload Data to GCS"
         run: |
@@ -91,21 +99,19 @@ jobs:
             sleep 30
           done
 
-
       - name: "Upload Model to Vertex AI Model Registry"
         id: model_upload
         run: |
           MODEL_ARTIFACT_URI="gs://${{ env.GCP_VERTEX_BUCKET }}/models/house-price-model/"
+          SERVING_IMAGE_TAG="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GCP_ARTIFACT_REGISTRY_REPO }}/house-price-predictor:latest"
 
           echo "Uploading model to Vertex AI Model Registry..."
-          MODEL_ID=$(gcloud ai models upload \
+          gcloud ai models upload \
             --region=${{ env.GCP_REGION }} \
-            --display-name="house-price-model-$(date +%Y%m%d%H%M%S)" \
+            --display-name="house-price-model-$(date +%Y%m%d%H%M%S)-crp" \
             --artifact-uri="${MODEL_ARTIFACT_URI}" \
-            --container-image-uri=us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-5:latest \
-            --format="value(name)")
-
-          # MODEL_ID=$(gcloud ai models list --region=${REGION} --filter="displayName:house-price-model" --format="value(name)" | cut -d '/' -f 6)
+            --container-image-uri="${SERVING_IMAGE_TAG}" \
+            --format="value(name)"
           
           MODEL_ID=$(gcloud ai models list --region=${{ env.GCP_REGION }} --sort-by=~updateTime --limit=1 --format="value(name)" | cut -d '/' -f 6)
 

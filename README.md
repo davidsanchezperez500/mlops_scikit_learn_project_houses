@@ -12,6 +12,13 @@ Este repositorio muestra un flujo completo de MLOps para la predicción de preci
 El objetivo es mostrar buenas prácticas de MLOps, desde el desarrollo local hasta el despliegue y la inferencia en la nube, facilitando la reproducibilidad y automatización del ciclo de vida de modelos de machine learning.
 
 ---
+## TODO
+
+- Reentrenamiento Automatizado: Implementar triggers para reentrenar el modelo (ej., en un cronograma, o cuando la calidad del modelo disminuya).
+- Monitorización del Modelo: Configurar alertas y paneles en Vertex AI para monitorizar el rendimiento del modelo en producción (deriva de datos, deriva de conceptos, sesgo, etc.).
+- Pruebas Automatizadas: Añadir más tests a tu pipeline de GitHub Actions, como pruebas unitarias para tu código de entrenamiento o pruebas de integración después del despliegue.
+- Versionado del Modelo: Gestionar las diferentes versiones de tus modelos en el registro de modelos y cómo se despliegan.
+- A/B Testing de Modelos: Si tienes múltiples versiones de modelos, puedes usar el tráfico dividido en los endpoints de Vertex AI para dirigir un porcentaje del tráfico a diferentes modelos.
 
 
 ## Requisitos
@@ -65,10 +72,12 @@ gcloud ai custom-jobs create \
 ```bash
 
 gcloud ai models upload \
-  --region=${REGION} \
-  --display-name="house-price-model" \
+  --region=${REGION}  \
+  --display-name="house-price-model-$(date +%Y%m%d%H%M%S)-crp" \
   --artifact-uri=gs://${VERTEX_BUCKET}/models/house-price-model/ \
-  --container-image-uri=us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-5:latest
+  --container-image-uri=us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-5:latest \
+  --handler-path=predictor.py \
+  --format="value(name)"
 
 ```
 
@@ -87,8 +96,7 @@ gcloud ai endpoints deploy-model ${YOUR_ENDPOINT_ID_NUMERIC} \
   --max-replica-count=1 \
   --traffic-split=0=100 \
   --region=${REGION}
-
-
+```
 
 ## Realizar Predicciones Online
 ```bash
