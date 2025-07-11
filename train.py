@@ -1,72 +1,71 @@
-# trainer/train.py
+import argparse
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 import joblib
 import os
-import argparse
+import gcsfs # Importar gcsfs
 
-def train_model(data_path, model_output_dir):
+def train_model(data_path: str, model_output_dir: str):
     """
-    Entrena un modelo de regresión lineal simple y lo guarda.
+    Trains a linear regression model and saves it to a GCS path.
 
     Args:
-        data_path (str): Ruta al archivo CSV del dataset (puede ser local o GCS).
-        model_output_dir (str): Directorio donde se guardará el modelo entrenado (puede ser local o GCS).
+        data_path (str): GCS path to the input CSV data (e.g., "gs://your-bucket/data.csv").
+        model_output_dir (str): GCS path to save the trained model (e.g., "gs://your-bucket/models/").
     """
     print(f"Cargando datos desde: {data_path}")
-    try:
-        # pandas puede leer directamente de gs:// si google-cloud-storage está instalado
-        # y si se ejecuta en un entorno donde gs:// paths son accesibles (como Vertex AI o local con gsutil configurado)
-        df = pd.read_csv(data_path)
-    except Exception as e:
-        print(f"ERROR: No se pudo cargar el archivo CSV desde {data_path}. Error: {e}")
-        # Para la ejecución local, asegúrate de que 'data.csv' está en el directorio correcto
-        # o que la ruta 'gs://' se maneje correctamente (requiere la librería google-cloud-storage)
-        exit(1) # Terminar el script si los datos no se cargan
+    # Usar pandas para leer directamente desde GCS gracias a gcsfs
+    df = pd.read_csv(data_path)
+    print("Datos cargados exitosamente.")
 
-    features = ['bedrooms', 'bathrooms', 'sq_footage']
-    target = 'price'
+    # Preparar los datos
+    # Asegúrate de que estas características coincidan con las de tus datos
+    EXPECTED_FEATURES = ['bedrooms', 'bathrooms', 'sq_footage']
+    target_feature = 'price'
 
-    X = df[features]
-    y = df[target]
+    X = df[EXPECTED_FEATURES]
+    y = df[target_feature]
 
     print("Entrenando el modelo de regresión lineal...")
     model = LinearRegression()
     model.fit(X, y)
     print("Modelo entrenado exitosamente.")
 
-    # Asegura que el directorio de salida exista
-    # Esto funciona para rutas locales y para rutas GCS (a través del FUSE mount en Vertex AI)
-    os.makedirs(model_output_dir, exist_ok=True)
+    # Definir la ruta completa del archivo del modelo en GCS
+    model_file_name = "model.joblib"
+    full_model_gcs_path = os.path.join(model_output_dir, model_file_name)
 
-    # Guardar el modelo
-    model_path = os.path.join(model_output_dir, 'model.joblib')
-    print(f"Intentando guardar el modelo en: {model_path}")
-    try:
-        joblib.dump(model, model_path, protocol=4)
-        print(f"Modelo guardado exitosamente en: {model_path}")
-    except Exception as e:
-        print(f"ERROR: No se pudo guardar el modelo en {model_path}. Error: {e}")
-        # Imprimir el traceback completo para depuración
-        import traceback
-        traceback.print_exc()
-        exit(1) # Terminar el script si el modelo no se guarda
+    print(f"Guardando el modelo en: {full_model_gcs_path}")
 
+    # Crear el sistema de archivos GCS
+    fs = gcsfs.GCSFileSystem()
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    # AIP_MODEL_DIR es una variable de entorno proporcionada por Vertex AI para la ruta de salida del modelo
+    # Asegurarse de que el directorio exista en GCS
+    # gcsfs.mkdirs crea directorios en GCS de forma recursiva
+    # No es necesario usar os.makedirs aquí
+    fs.mkdirs(model_output_dir, exist_ok=True)
+
+    # Guardar el modelo directamente en GCS usando gcsfs
+    # joblib.dump puede escribir directamente a una ruta fsspec
+    with fs.open(full_model_gcs_path, 'wb') as f:
+        joblib.dump(model, f)
+
+    print("Modelo guardado exitosamente en GCS.")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Train a house price prediction model.")
     parser.add_argument(
-        '--model-dir',
-        dest='model_dir',
-        default=os.getenv('AIP_MODEL_DIR', './local_model_output'), # Valor por defecto para pruebas locales
-        help='El directorio donde guardar el modelo entrenado.')
-    parser.add_argument(
-        '--data-path',
-        dest='data_path',
+        "--data-path",
         type=str,
-        default='data.csv', # Valor por defecto para pruebas locales
-        help='Ruta al archivo CSV del dataset de entrenamiento.')
-
+        required=True,
+        help="GCS path to the input CSV data (e.g., 'gs://your-bucket/data.csv')"
+    )
+    parser.add_argument(
+        "--model-dir",
+        type=str,
+        required=True,
+        help="GCS directory to save the trained model (e.g., 'gs://your-bucket/models/')"
+    )
     args = parser.parse_args()
+
     train_model(args.data_path, args.model_dir)
