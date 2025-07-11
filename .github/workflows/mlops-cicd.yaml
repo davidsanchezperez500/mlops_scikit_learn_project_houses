@@ -1,9 +1,9 @@
-name: MLOps CI/CD Pipeline
+name: MLOps CI/CD Pipeline Training
 
 on:
   push:
     branches:
-      - main
+      - training_pipelines
 
 jobs:
   build_train_deploy:
@@ -18,10 +18,6 @@ jobs:
       GCP_ARTIFACT_REGISTRY_REPO: ${{ vars.GCP_ARTIFACT_REGISTRY_REPO }}
       GCP_VERTEX_BUCKET: ${{ vars.GCP_VERTEX_BUCKET }}
       GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
-
-    outputs:
-      MODEL_ID: ${{ steps.model_upload.outputs.MODEL_ID }}
-
       
     steps:
       - uses: 'actions/checkout@v4'
@@ -37,15 +33,14 @@ jobs:
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
 
       - name: "Set up Cloud SDK"
-        uses: "google-github-actions/setup-gcloud@v1"
+        uses: "google-github-actions/setup-gcloud@v2"
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
-          version: ">= 390.0.0"
 
       - name: "Configure Docker for Artifact Registry"
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
 
-      - name: "Build and Push Docker Image"
+      - name: "Build and Push Trainer Docker Image"
         run: |
           IMAGE_TAG="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GCP_ARTIFACT_REGISTRY_REPO }}/house-price-trainer:latest"
           echo "Building Docker image: ${IMAGE_TAG}"
@@ -90,40 +85,3 @@ jobs:
             fi
             sleep 30
           done
-
-
-      - name: "Upload Model to Vertex AI Model Registry"
-        id: model_upload
-        run: |
-          MODEL_ARTIFACT_URI="gs://${{ env.GCP_VERTEX_BUCKET }}/models/house-price-model/"
-
-          echo "Uploading model to Vertex AI Model Registry..."
-          MODEL_ID=$(gcloud ai models upload \
-            --region=${{ env.GCP_REGION }} \
-            --display-name="house-price-model-$(date +%Y%m%d%H%M%S)" \
-            --artifact-uri="${MODEL_ARTIFACT_URI}" \
-            --container-image-uri=us-docker.pkg.dev/vertex-ai/prediction/sklearn-cpu.1-5:latest \
-            --format="value(name)")
-
-          # MODEL_ID=$(gcloud ai models list --region=${REGION} --filter="displayName:house-price-model" --format="value(name)" | cut -d '/' -f 6)
-          
-          MODEL_ID=$(gcloud ai models list --region=${{ env.GCP_REGION }} --sort-by=~updateTime --limit=1 --format="value(name)" | cut -d '/' -f 6)
-
-          echo "Model uploaded with ID: $MODEL_ID"
-          cat <<EOF >> "${GITHUB_OUTPUT}"
-          MODEL_ID=$MODEL_ID
-          EOF
-
-      - name: "Deploy Model to Endpoint"
-        id: deploy_model
-        run: |
-          echo "Deploying model ${{ steps.model_upload.outputs.MODEL_ID }} to endpoint house-price-prediction-endpoint"
-          gcloud ai endpoints deploy-model house-price-prediction-endpoint \
-            --model=projects/${{ env.GCP_PROJECT_ID }}/locations/${{ env.GCP_REGION }}/models/${{ steps.model_upload.outputs.MODEL_ID }} \
-            --display-name="house-price-deployment-$(date +%Y%m%d%H%M%S)" \
-            --machine-type=n1-standard-2 \
-            --min-replica-count=1 \
-            --max-replica-count=1 \
-            --traffic-split=0=100 \
-            --region=${{ env.GCP_REGION }}
-          echo "Model deployment initiated. This can take several minutes."
